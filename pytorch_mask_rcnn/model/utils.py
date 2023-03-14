@@ -12,18 +12,20 @@ class Matcher:
         Arguments:
             iou (Tensor[M, N]): containing the pairwise quality between
             M ground-truth boxes and N predicted boxes.
+            包含M个GT和N个锚框之间的IoU值
 
         Returns:
             label (Tensor[N]): positive (1) or negative (0) label for each predicted box,
             -1 means ignoring this box.
             matched_idx (Tensor[N]): indices of gt box matched by each predicted box.
+            返回标签以及匹配的GT编号
         """
 
-        value, matched_idx = iou.max(dim=0)
-        label = torch.full((iou.shape[1],), -1, dtype=torch.float, device=iou.device)
+        value, matched_idx = iou.max(dim=0) # 最大值iou以及索引
+        label = torch.full((iou.shape[1],), -1, dtype=torch.float, device=iou.device) #创建一个[N,1]的全-1(忽略)tensor
 
-        label[value >= self.high_threshold] = 1
-        label[value < self.low_threshold] = 0
+        label[value >= self.high_threshold] = 1 # 高于正样本最低阈值的设为正样本
+        label[value < self.low_threshold] = 0 # 低于负样本最高阈值的设为负样本
 
         if self.allow_low_quality_matches:
             highest_quality = iou.max(dim=1)[0]
