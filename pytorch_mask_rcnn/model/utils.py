@@ -28,7 +28,7 @@ class Matcher:
         label[value < self.low_threshold] = 0 # 低于负样本最高阈值的设为负样本
 
         if self.allow_low_quality_matches:
-            highest_quality = iou.max(dim=1)[0] # 与第一个GT
+            highest_quality = iou.max(dim=1)[0] # 第一个GT与锚框匹配的最大iou
             gt_pred_pairs = torch.where(iou == highest_quality[:, None])[1]
             label[gt_pred_pairs] = 1
 
