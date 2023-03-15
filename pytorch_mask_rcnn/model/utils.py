@@ -27,9 +27,10 @@ class Matcher:
         label[value >= self.high_threshold] = 1 # 高于正样本最低阈值的设为正样本
         label[value < self.low_threshold] = 0 # 低于负样本最高阈值的设为负样本
 
+        #FixMe:为每个GT保留其对应最大iou的anchor，即使未超过阈值
         if self.allow_low_quality_matches:
-            highest_quality = iou.max(dim=1)[0] # 第一个GT与锚框匹配的最大iou
-            gt_pred_pairs = torch.where(iou == highest_quality[:, None])[1]
+            highest_quality = iou.max(dim=1)[0] #FixMe：选择每个GT对应的最大iou值，列表第一项为具体值shape[M, ]，第二项为其索引
+            gt_pred_pairs = torch.where(iou == highest_quality[:, None])[1] # 第一项为对应索引[0,1,2]，第二项为对应anchor的索引
             label[gt_pred_pairs] = 1
 
         return label, matched_idx

@@ -39,9 +39,9 @@ class RegionProposalNetwork(nn.Module):
         self.anchor_generator = anchor_generator #锚框生成
         self.head = head #rpn head
 
-        self.proposal_matcher = Matcher(fg_iou_thresh, bg_iou_thresh, allow_low_quality_matches=True)
-        self.fg_bg_sampler = BalancedPositiveNegativeSampler(num_samples, positive_fraction)
-        self.box_coder = BoxCoder(reg_weights)
+        self.proposal_matcher = Matcher(fg_iou_thresh, bg_iou_thresh, allow_low_quality_matches=True) #anchor与GT匹配
+        self.fg_bg_sampler = BalancedPositiveNegativeSampler(num_samples, positive_fraction) #分配正负样本比例
+        self.box_coder = BoxCoder(reg_weights) # 位置信息与需要学习的回归目标(锚框偏移)转换
 
         self._pre_nms_top_n = pre_nms_top_n
         self._post_nms_top_n = post_nms_top_n
@@ -49,6 +49,8 @@ class RegionProposalNetwork(nn.Module):
         self.min_size = 1
 
     def create_proposal(self, anchor, objectness, pred_bbox_delta, image_shape):
+        # nms处理前后保留的anchor数
+        """ objectness:类别预测,为每个类别的概率，不是非0即1 """
         if self.training:
             pre_nms_top_n = self._pre_nms_top_n['training']
             post_nms_top_n = self._post_nms_top_n['training']
@@ -56,9 +58,10 @@ class RegionProposalNetwork(nn.Module):
             pre_nms_top_n = self._pre_nms_top_n['testing']
             post_nms_top_n = self._post_nms_top_n['testing']
 
-        pre_nms_top_n = min(objectness.shape[0], pre_nms_top_n)
-        top_n_idx = objectness.topk(pre_nms_top_n)[1]
-        score = objectness[top_n_idx]
+        pre_nms_top_n = min(objectness.shape[0], pre_nms_top_n) #获取保留数
+        top_n_idx = objectness.topk(pre_nms_top_n)[1] #获取索引
+        score = objectness[top_n_idx] #获取保留的anchor的置信度
+        #获取proposal，输入锚框和偏移量，返回预测
         proposal = self.box_coder.decode(pred_bbox_delta[top_n_idx], anchor[top_n_idx])
 
         proposal, score = process_box(proposal, score, image_shape, self.min_size)
@@ -72,19 +75,25 @@ class RegionProposalNetwork(nn.Module):
 
         pos_idx, neg_idx = self.fg_bg_sampler(label)
         idx = torch.cat((pos_idx, neg_idx))
+        # 仅使用正样本(回归损失仅使用正样本，分类损失使用正样本和负样本)
         regression_target = self.box_coder.encode(gt_box[matched_idx[pos_idx]], anchor[pos_idx])
-
+        # 分类损失(二元交叉熵损失)(loss = -[y * log(sigmoid(x)) + (1 - y) * log(1 - sigmoid(x))])
         objectness_loss = F.binary_cross_entropy_with_logits(objectness[idx], label[idx])
+        # 边框回归损失(L1 loss)
         box_loss = F.l1_loss(pred_bbox_delta[pos_idx], regression_target, reduction='sum') / idx.numel()
 
         return objectness_loss, box_loss
 
     def forward(self, feature, image_shape, target=None):
+        """ 首先生成锚框,之后使用rpn head进行预测,然后调换维度顺序以方便操作
+        在创建proposal时需要进行位置信息的转换,再保留置信度高的的锚框
+        最后计算损失需要计算iou,并得到匹配"""
         if target is not None:
             gt_box = target['boxes']
         anchor = self.anchor_generator(feature, image_shape)
 
         objectness, pred_bbox_delta = self.head(feature)
+        # 调换顺序以方便操作,将NCHW(批大小,通道数,高度,宽度),转换成 NHWC(批大小、高度、宽度、通道数)
         objectness = objectness.permute(0, 2, 3, 1).flatten()
         pred_bbox_delta = pred_bbox_delta.permute(0, 2, 3, 1).reshape(-1, 4)
 
