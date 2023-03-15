@@ -129,6 +129,7 @@ class MaskRCNN(nn.Module):
 
         rpn_pre_nms_top_n = dict(training=rpn_pre_nms_top_n_train, testing=rpn_pre_nms_top_n_test) # 创建字典
         rpn_post_nms_top_n = dict(training=rpn_post_nms_top_n_train, testing=rpn_post_nms_top_n_test)
+        #todo:为什么计算损失用的是匹配被认为是正样本的锚框和proposal
         self.rpn = RegionProposalNetwork(
                 rpn_anchor_generator, rpn_head,
                 rpn_fg_iou_thresh, rpn_bg_iou_thresh,
