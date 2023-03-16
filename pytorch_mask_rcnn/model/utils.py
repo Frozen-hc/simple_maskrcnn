@@ -36,6 +36,7 @@ class Matcher:
         return label, matched_idx
 
 
+# 对正负样本进行平衡采样，主要用于解决类别不平衡问题
 class BalancedPositiveNegativeSampler:
     def __init__(self, num_samples, positive_fraction):
         self.num_samples = num_samples
@@ -45,11 +46,13 @@ class BalancedPositiveNegativeSampler:
         positive = torch.where(label == 1)[0]
         negative = torch.where(label == 0)[0]
 
+        # positive的样本数为总数*positive比例与positive的个数中最小值
         num_pos = int(self.num_samples * self.positive_fraction)
         num_pos = min(positive.numel(), num_pos)
         num_neg = self.num_samples - num_pos
         num_neg = min(negative.numel(), num_neg)
 
+        # 随机打乱
         pos_perm = torch.randperm(positive.numel(), device=positive.device)[:num_pos]
         neg_perm = torch.randperm(negative.numel(), device=negative.device)[:num_neg]
 

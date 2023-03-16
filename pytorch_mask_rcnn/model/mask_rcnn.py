@@ -138,11 +138,13 @@ class MaskRCNN(nn.Module):
                 rpn_pre_nms_top_n, rpn_post_nms_top_n, rpn_nms_thresh)
 
         #------------ RoIHeads --------------------------
+        # shape[N, C, output_height, output_width]
         box_roi_pool = RoIAlign(output_size=(7, 7), sampling_ratio=2)
 
-        resolution = box_roi_pool.output_size[0]
+        resolution = box_roi_pool.output_size[0] #output_size=(7,7)
         in_channels = out_channels * resolution ** 2
         mid_channels = 1024
+        # 预测类别置信度以及边框偏移
         box_predictor = FastRCNNPredictor(in_channels, mid_channels, num_classes)
 
         self.head = RoIHeads(
@@ -181,6 +183,8 @@ class MaskRCNN(nn.Module):
             return result
 
 
+#done
+# 预测类别置信度以及边框偏移
 class FastRCNNPredictor(nn.Module):
     def __init__(self, in_channels, mid_channels, num_classes):
         super().__init__()
@@ -211,6 +215,7 @@ class MaskRCNNPredictor(nn.Sequential):
 
         d = OrderedDict()
         next_feature = in_channels
+        # enumerate第二参数代表开始的索引
         for layer_idx, layer_features in enumerate(layers, 1):
             d['mask_fcn{}'.format(layer_idx)] = nn.Conv2d(next_feature, layer_features, 3, 1, 1)
             d['relu{}'.format(layer_idx)] = nn.ReLU(inplace=True)

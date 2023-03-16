@@ -19,8 +19,10 @@ def main(args):
     # ---------------------- prepare data loader ------------------------------- #
     # 准备数据集
     dataset_train = pmr.datasets(args.dataset, args.data_dir, "train2017", train=True)
-    indices = torch.randperm(len(dataset_train)).tolist() #返回0-n的随机列表
-    d_train = torch.utils.data.Subset(dataset_train, indices) #将数据集打乱
+    # indices = torch.randperm(len(dataset_train)).tolist() #返回0-n的随机列表
+    batch_size = 4
+    d_train = torch.utils.data.DataLoader(dataset_train, batch_size, shuffle=True)
+    # d_train = torch.utils.data.Subset(dataset_train, indices) #将数据集打乱
 
     d_test = pmr.datasets(args.dataset, args.data_dir, "val2017", train=True) # set train=True for eval
 
@@ -30,7 +32,7 @@ def main(args):
 
     print(args)
     num_classes = max(d_train.dataset.classes) + 1 # including background class id:name 所以用max可以获取类别数
-    model = pmr.maskrcnn_resnet50(True, num_classes, msd_dir='python_mask_rcnn/checkpoints').to(device)
+    model = pmr.maskrcnn_resnet50(True, num_classes, msd_dir='pytorch_mask_rcnn/checkpoints').to(device)
 
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.SGD(
@@ -48,7 +50,7 @@ def main(args):
         model.load_state_dict(checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
         start_epoch = checkpoint["epochs"]
-        del checkpoint
+        # del checkpoint
         torch.cuda.empty_cache()
 
     since = time.time()
@@ -80,10 +82,10 @@ def main(args):
         prefix, ext = os.path.splitext(args.ckpt_path)
         ckpts = glob.glob(prefix + "-*" + ext)
         ckpts.sort(key=lambda x: int(re.search(r"-(\d+){}".format(ext), os.path.split(x)[1]).group(1)))
-        n = 10
-        if len(ckpts) > n:
-            for i in range(len(ckpts) - n):
-                os.system("rm {}".format(ckpts[i]))
+        # n = 10
+        # if len(ckpts) > n:
+        #     for i in range(len(ckpts) - n):
+        #         os.system("rm {}".format(ckpts[i]))
 
     # -------------------------------------------------------------------------- #
 

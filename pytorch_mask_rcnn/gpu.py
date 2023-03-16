@@ -10,7 +10,7 @@ json_file = os.path.join(dirname, "gpu_info.json")
 
 def get_gpu_prop(show=False):
     ngpus = torch.cuda.device_count()
-    
+
     properties = []
     for dev in range(ngpus):
         prop = torch.cuda.get_device_properties(dev)
@@ -20,7 +20,7 @@ def get_gpu_prop(show=False):
             "total_momory": round(prop.total_memory / 1073741824, 2), # unit GB
             "sm_count": prop.multi_processor_count
         })
-       
+
     if show:
         print("cuda: {}".format(torch.cuda.is_available()))
         print("available GPU(s): {}".format(ngpus))
@@ -45,7 +45,7 @@ def collect_gpu_info(model_name, fps):
         gpu_info = json.load(open(json_file))
     else:
         gpu_info = {}
-    
+
     prop = get_gpu_prop()
     name = prop[0]["name"]
     check = [p["name"] == name for p in prop]
@@ -67,4 +67,4 @@ def collect_gpu_info(model_name, fps):
         gpu_info = sort(gpu_info)
         json.dump(gpu_info, open(json_file, "w"))
     return gpu_info
-    
+

@@ -10,18 +10,18 @@ class Transformer:
         self.max_size = max_size
         self.image_mean = image_mean
         self.image_std = image_std
-        
+
     def __call__(self, image, target):
-        image = self.normalize(image)
+        image = self.normalize(image) #归一化
         image, target = self.resize(image, target)
         image = self.batched_image(image)
-        
+
         return image, target
 
     def normalize(self, image):
         if image.shape[0] == 1:
             image = image.repeat(3, 1, 1)
-        
+
         dtype, device = image.dtype, image.device
         mean = torch.tensor(self.image_mean, dtype=dtype, device=device)
         std = torch.tensor(self.image_std, dtype=dtype, device=device)
@@ -31,26 +31,30 @@ class Transformer:
         ori_image_shape = image.shape[-2:]
         min_size = float(min(image.shape[-2:]))
         max_size = float(max(image.shape[-2:]))
-        
-        scale_factor = min(self.min_size / min_size, self.max_size / max_size)
+
+        scale_factor = min(self.min_size / min_size, self.max_size / max_size) # 缩放因子, int
+        # 将图像等比缩放,height和width分别不超过min_size和max_size
         size = [round(s * scale_factor) for s in ori_image_shape]
         image = F.interpolate(image[None], size=size, mode='bilinear', align_corners=False)[0]
 
         if target is None:
             return image, target
-        
+
+        # 对box进行缩放
         box = target['boxes']
         box[:, [0, 2]] = box[:, [0, 2]] * image.shape[-1] / ori_image_shape[1]
         box[:, [1, 3]] = box[:, [1, 3]] * image.shape[-2] / ori_image_shape[0]
         target['boxes'] = box
-        
+
+        # 对mask进行缩放
         if 'masks' in target:
             mask = target['masks']
             mask = F.interpolate(mask[None].float(), size=size)[0].byte()
             target['masks'] = mask
-            
+
         return image, target
-    
+
+    # 将所有图片对齐到相同大小
     def batched_image(self, image, stride=32):
         size = image.shape[-2:]
         max_size = tuple(math.ceil(s / stride) * stride for s in size)
@@ -60,26 +64,29 @@ class Transformer:
         batched_img[:, :image.shape[-2], :image.shape[-1]] = image
 
         return batched_img[None]
-    
+
     def postprocess(self, result, image_shape, ori_image_shape):
+        # 将box缩放回去
         box = result['boxes']
         box[:, [0, 2]] = box[:, [0, 2]] * ori_image_shape[1] / image_shape[1]
         box[:, [1, 3]] = box[:, [1, 3]] * ori_image_shape[0] / image_shape[0]
         result['boxes'] = box
-        
+
+        # 在原图中贴上掩膜
         if 'masks' in result:
             mask = result['masks']
             mask = paste_masks_in_image(mask, box, 1, ori_image_shape)
             result['masks'] = mask
-            
+
         return result
 
 
+# 根据输入的RoI框的大小，对其进行调整，以确保RoI的宽高比与预定义的基准宽高比相似。
 def expand_detection(mask, box, padding):
     M = mask.shape[-1]
     scale = (M + 2 * padding) / M
     padded_mask = torch.nn.functional.pad(mask, (padding,) * 4)
-    
+
     w_half = (box[:, 2] - box[:, 0]) * 0.5
     h_half = (box[:, 3] - box[:, 1]) * 0.5
     x_c = (box[:, 2] + box[:, 0]) * 0.5
@@ -95,10 +102,10 @@ def expand_detection(mask, box, padding):
     box_exp[:, 3] = y_c + h_half
     return padded_mask, box_exp.to(torch.int64)
 
-
+#从特征图中提取出来的运动物体的掩码，粘贴回原始图像中对应的位置上。
 def paste_masks_in_image(mask, box, padding, image_shape):
     mask, box = expand_detection(mask, box, padding)
-    
+
     N = mask.shape[0]
     size = (N,) + tuple(image_shape)
     im_mask = torch.zeros(size, dtype=mask.dtype, device=mask.device)
@@ -106,7 +113,7 @@ def paste_masks_in_image(mask, box, padding, image_shape):
         b = b.tolist()
         w = max(b[2] - b[0], 1)
         h = max(b[3] - b[1], 1)
-        
+
         m = F.interpolate(m[None, None], size=(h, w), mode='bilinear', align_corners=False)[0][0]
 
         x1 = max(b[0], 0)
